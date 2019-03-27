@@ -5,7 +5,7 @@
     CONTRIBUTORS: Singelé Cédric, Haot Vincent, Elliston Jack
 	DATE: 31/07/13
 	KEYWORDS: OOXML, MICROSOFT EXCEL
-	VERSION : 0.6.9
+	VERSION : 0.7.0
     LICENSE: LGPL 2.1
 
     This PowerShell Module allow simple creation of XLSX file by using the EPPlus 4.1 .Net DLL 
@@ -27,6 +27,11 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 .SYNOPSIS
+
+    VERSION 0.7.0 (27/03/2019)
+        - Improved Cmdlet : Export-OOXML
+          It is now possible to do a cumulative export with the -AddToExistingDocument switch parameter
+          You MUST provide another worksheetname each time or it won't work
 
     VERSION 0.6.9 (04/10/2017)
         - Improved Cmdlet : Add-OOXMLWorksheet
@@ -1656,7 +1661,7 @@ Function New-OOXMLStyleSheet {
         {
             for($i=0;$i -lt $Book.Styles.NamedStyles.Count; $i++)
             {
-                if($Book.Styles.NamedStyles[$i].Name -like "URIStyle")
+                if($Book.Styles.NamedStyles[$i].Name -like $Name)
                 {
                   return [OfficeOpenXml.Style.XmlAccess.ExcelNamedStyleXml]$WorkBook.Styles.NamedStyles[$i]
                 }
@@ -1909,7 +1914,9 @@ Function Export-OOXML {
         [parameter(ParameterSetName="DataValidation")]
         [object[]]$DataValidationLists,
         [parameter(ParameterSetName="DataValidation")]
-        [object[]]$DataValidationAssignements
+        [object[]]$DataValidationAssignements,
+        [object[]]$CustomFormatings,
+        [switch]$AddToExistingDocument
     )
     process{
 
@@ -1948,13 +1955,28 @@ Function Export-OOXML {
 
             $RowPosition = 2
 
-            [OfficeOpenXml.ExcelPackage]$excel = New-OOXMLPackage -author "ExcelPSLib" -title $DocumentName
-            [OfficeOpenXml.ExcelWorkbook]$book = $excel | Get-OOXMLWorkbook
+            if($AddToExistingDocument)
+            {
+                [OfficeOpenXml.ExcelPackage]$excel = New-OOXMLPackage -author "ExcelPSLib" -title $DocumentName -Path $FileFullPath
+                [OfficeOpenXml.ExcelWorkbook]$book = $excel | Get-OOXMLWorkbook
 
-            $AutofilterRange = Convert-OOXMLCellsCoordinates -StartRow $RowPosition -EndRow $RowPosition -StartCol 1 -EndCol $ColumnNumber
+                $AutofilterRange = Convert-OOXMLCellsCoordinates -StartRow $RowPosition -EndRow $RowPosition -StartCol 1 -EndCol $ColumnNumber
 
-            $excel | Add-OOXMLWorksheet -WorkSheetName $WorksheetName -AutofilterRange $AutofilterRange
-            $sheet = $book | Select-OOXMLWorkSheet -WorkSheetNumber 1
+                $excel | Add-OOXMLWorksheet -WorkSheetName $WorksheetName -AutofilterRange $AutofilterRange
+                $sheet = $book | Select-OOXMLWorkSheet -WorkSheetName $WorksheetName
+            }
+            else
+            {
+                [OfficeOpenXml.ExcelPackage]$excel = New-OOXMLPackage -author "ExcelPSLib" -title $DocumentName
+                [OfficeOpenXml.ExcelWorkbook]$book = $excel | Get-OOXMLWorkbook
+
+                $AutofilterRange = Convert-OOXMLCellsCoordinates -StartRow $RowPosition -EndRow $RowPosition -StartCol 1 -EndCol $ColumnNumber
+
+                $excel | Add-OOXMLWorksheet -WorkSheetName $WorksheetName -AutofilterRange $AutofilterRange
+                $sheet = $book | Select-OOXMLWorkSheet -WorkSheetName $WorksheetName
+            }
+            
+            
             
             $StyleHeaderCollection = @{
                 "AliceBlue" = New-OOXMLStyleSheet -WorkBook $book -Name "AliceBlueStyleHeader" -Size 14 -Bold -HAlign Center -VAlign Center -BackGroundColor AliceBlue -FillType Solid -ForeGroundColor Black -TextRotation $HeaderTextRotation
@@ -2503,6 +2525,11 @@ Function Export-OOXML {
                 if($ColIdx -gt 0){
                     $Sheet.View.FreezePanes($FirstDataRowIndex,$ColIdx)
                 }
+            }
+
+            foreach($CustomFormating in $CustomFormatings)
+            {
+                #TODO
             }
 
             if($DataValidationLists)
